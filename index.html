@@ -1,0 +1,262 @@
+<script>
+  const CURRENCIES = {
+    rub: { symbol: "₽", rate: 1, decimals: 0, before: false },
+    usd: { symbol: "$", rate: 0.011, decimals: 2, before: true },
+    egp: { symbol: "ج.м", rate: 0.55, decimals: 2, before: false }
+  };
+
+  let currency = 'rub';
+  let cart = [];
+  let deliveryType = 'delivery';
+  let currentCat = 'all';
+  let chosenZone = '';
+
+  const MENUDATA = [
+    { id: 1, cat: 'pizza', name: 'Маргарита', desc: 'Томатный соус, моцарелла, базилик', emoji: '🍕', badge: 'ХИТ', price: 490 },
+    { id: 2, cat: 'pizza', name: 'Пепперони', desc: 'Пикантная колбаска, томаты, моцарелла', emoji: '🍕', badge: '', price: 590 },
+    { id: 3, cat: 'pizza', name: 'Четыре сыра', desc: 'Моцарелла, пармезан, горгонзола, рикотта', emoji: '🧀', badge: 'NEW', price: 650 },
+    { id: 4, cat: 'pizza', name: 'Карбонара', desc: 'Бекон, яйцо, пармезан, сливочный соус', emoji: '🍕', badge: '', price: 620 },
+    { id: 5, cat: 'pizza', name: 'Гавайская', desc: 'Ветчина, ананас, моцарелла', emoji: '🍍', badge: '', price: 550 },
+    { id: 6, cat: 'pizza', name: 'Грибная', desc: 'Шампиньоны, трюфельное масло, моцарелла', emoji: '🍄', badge: '', price: 520 },
+    { id: 7, cat: 'pasta', name: 'Болоньезе', desc: 'Мясной соус, томаты, пармезан', emoji: '🍝', badge: '', price: 420 },
+    { id: 8, cat: 'pasta', name: 'Альфредо', desc: 'Сливочный соус, курица, пармезан', emoji: '🍝', badge: 'ХИТ', price: 440 },
+    { id: 9, cat: 'salad', name: 'Цезарь', desc: 'Курица, романо, пармезан', emoji: '🥗', badge: '', price: 380 },
+    { id: 10, cat: 'salad', name: 'Греческий', desc: 'Фета, огурцы, томаты, оливки', emoji: '🥗', badge: '', price: 320 },
+    { id: 11, cat: 'dessert', name: 'Тирамису', desc: 'Маскарпоне, эспрессо, савоярди', emoji: '🍰', badge: 'ХИТ', price: 280 },
+    { id: 12, cat: 'dessert', name: 'Панна Котта', desc: 'Сливки, ваниль, ягодный соус', emoji: '🍮', badge: '', price: 240 },
+    { id: 13, cat: 'drink', name: 'Лимонад', desc: 'Лимон, мята, имбирь', emoji: '🥤', badge: '', price: 180 },
+    { id: 14, cat: 'drink', name: 'San Pellegrino', desc: 'Газированная вода, 500 мл', emoji: '💧', badge: '', price: 150 },
+    { id: 15, cat: 'drink', name: 'Чай', desc: 'Яблоко, курица, гвоздика', emoji: '🍵', badge: '', price: 160 }
+  ];
+
+  // Кэширование DOM элементов
+  const DOM = {
+    cartCount: document.getElementById('cartCount'),
+    cartItems: document.getElementById('cartItems'),
+    cartFooter: document.getElementById('cartFooter'),
+    cartTotal: document.getElementById('cartTotal'),
+    cartDropdown: document.getElementById('cartDropdown'),
+    cartBackdrop: document.getElementById('cartBackdrop'),
+    catBar: document.getElementById('catBar'),
+    menuGrid: document.getElementById('menuGrid'),
+    menuSection: document.getElementById('menu-section'),
+    summaryItems: document.getElementById('summaryItems'),
+    summaryTotalRow: document.getElementById('summaryTotalRow'),
+    summaryTotal: document.getElementById('summaryTotal'),
+    addressGroup: document.getElementById('addressGroup'),
+    fDistrict: document.getElementById('fDistrict'),
+    zoneBox: document.getElementById('zoneBox'),
+    orderNum: document.getElementById('orderNum'),
+    toast: document.getElementById('toast'),
+    fName: document.getElementById('fName'),
+    fPhone: document.getElementById('fPhone')
+  };
+
+  function formatPrice(rubPrice) {
+    const cur = CURRENCIES[currency];
+    const val = rubPrice * cur.rate;
+    const fmt = val.toFixed(cur.decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    return cur.before ? `${cur.symbol}${fmt}` : `${fmt} ${cur.symbol}`;
+  }
+
+  function setCurrency(c) {
+    currency = c;
+    document.querySelectorAll('.cur-btn').forEach(b => {
+      b.classList.toggle('active', b.textContent.trim().toLowerCase() === c.toLowerCase());
+    });
+    renderMenu();
+    updateCartUI();
+    renderSummary();
+  }
+
+  function showPage(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(`page-${name}`).classList.add('active');
+    
+    document.querySelectorAll('.nav-tab').forEach(btn => btn.classList.remove('active'));
+    const tabs = [...document.querySelectorAll('.nav-tab')];
+    if (name === 'menu' && tabs[0]) tabs[0].classList.add('active');
+    if (name === 'checkout' && tabs[1]) tabs[1].classList.add('active');
+    
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function renderCatBar() {
+    const cats = ['all','pizza','pasta','salad','drink','dessert'];
+    const labels = {
+      all: 'Все блюда',
+      pizza: 'Пицца',
+      pasta: 'Паста',
+      salad: 'Салаты',
+      drink: 'Напитки',
+      dessert: 'Десерты'
+    };
+    DOM.catBar.innerHTML = cats.map(c =>
+      `<button type="button" class="cat-btn ${currentCat === c ? 'active' : ''}" onclick="filterCat('${c}', this)">${labels[c]}</button>`
+    ).join('');
+  }
+
+  function filterCat(cat, el) {
+    currentCat = cat;
+    document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+    if (el) el.classList.add('active');
+    renderMenu();
+    DOM.menuSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function renderMenu(cat = currentCat) {
+    currentCat = cat;
+    const items = cat === 'all' ? MENUDATA : MENUDATA.filter(i => i.cat === cat);
+    DOM.menuGrid.innerHTML = items.map(item => {
+      const badge = item.badge ? `<div class="card-badge">${item.badge}</div>` : '';
+      return `
+        <div class="card" id="card-${item.id}">
+          <div class="card-img">${item.emoji}${badge}</div>
+          <div class="card-body">
+            <div class="card-name">${item.name}</div>
+            <div class="card-desc">${item.desc}</div>
+            <div class="card-footer">
+              <div class="card-price" id="price-${item.id}">${formatPrice(item.price)}</div>
+              <button type="button" class="add-btn" onclick="addToCart(${item.id})" title="Добавить">+</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function addToCart(id) {
+    const item = MENUDATA.find(i => i.id === id);
+    const key = `${id}`;
+    const existing = cart.find(c => c.key === key);
+    if (existing) existing.qty += 1;
+    else cart.push({ key, id, name: item.name, emoji: item.emoji, price: item.price, qty: 1 });
+    updateCartUI();
+    showToast(`${item.emoji} ${item.name} добавлен в корзину`);
+  }
+
+  function updateCartUI() {
+    const total = cart.reduce((s,c) => s + c.price * c.qty, 0);
+    const count = cart.reduce((s,c) => s + c.qty, 0);
+    DOM.cartCount.textContent = count;
+
+    if (!cart.length) {
+      DOM.cartItems.innerHTML = `<div class="empty-cart"><span class="emoji">🛒</span>Корзина пуста</div>`;
+      DOM.cartFooter.style.display = 'none';
+      return;
+    }
+
+    DOM.cartFooter.style.display = 'block';
+    DOM.cartTotal.textContent = formatPrice(total);
+
+    DOM.cartItems.innerHTML = cart.map((c, i) => `
+      <div class="cart-item">
+        <div class="ci-emoji">${c.emoji}</div>
+        <div class="ci-info">
+          <div class="ci-name">${c.name}</div>
+          <div class="qty-ctrl">
+            <button type="button" class="qty-btn" onclick="changeQty(${i}, -1)">−</button>
+            <span class="qty-val">${c.qty}</span>
+            <button type="button" class="qty-btn" onclick="changeQty(${i}, 1)">+</button>
+          </div>
+        </div>
+        <div class="ci-price">${formatPrice(c.price * c.qty)}</div>
+      </div>
+    `).join('');
+  }
+
+  function changeQty(i, delta) {
+    cart[i].qty += delta;
+    if (cart[i].qty <= 0) cart.splice(i, 1);
+    updateCartUI();
+    renderSummary();
+  }
+
+  function toggleCart() {
+    DOM.cartDropdown.classList.toggle('open');
+    DOM.cartBackdrop.classList.toggle('open');
+  }
+
+  function renderSummary() {
+    if (!cart.length) {
+      DOM.summaryItems.innerHTML = `<div class="empty-msg">Корзина пуста</div>`;
+      DOM.summaryTotalRow.style.display = 'none';
+      return;
+    }
+    const total = cart.reduce((s,c) => s + c.price * c.qty, 0);
+    DOM.summaryItems.innerHTML = cart.map(c => `
+      <div class="os-line">
+        <span>${c.emoji} ${c.name} × ${c.qty}</span>
+        <span>${formatPrice(c.price * c.qty)}</span>
+      </div>
+    `).join('');
+    DOM.summaryTotal.textContent = formatPrice(total);
+    DOM.summaryTotalRow.style.display = 'flex';
+  }
+
+  function goCheckout() {
+    if (!cart.length) {
+      showToast('Корзина пуста');
+      return;
+    }
+    renderSummary();
+    showPage('checkout');
+    // Гарантированно закрываем выпадающее меню корзины при переходе
+    DOM.cartDropdown.classList.remove('open');
+    DOM.cartBackdrop.classList.remove('open');
+  }
+
+  function selectDelivery(type, el) {
+    deliveryType = type;
+    document.querySelectorAll('.del-opt').forEach(d => d.classList.remove('selected'));
+    el.classList.add('selected');
+    DOM.addressGroup.style.display = type === 'delivery' ? 'block' : 'none';
+  }
+
+  function selectZone(zone) {
+    chosenZone = zone;
+    DOM.fDistrict.value = zone;
+    document.querySelectorAll('.zone-btn').forEach(b => b.classList.toggle('active', b.textContent.trim() === zone));
+    DOM.zoneBox.textContent = `Выбран район: ${zone}`;
+    DOM.zoneBox.classList.add('show');
+  }
+
+  function placeOrder() {
+    const name = DOM.fName.value.trim();
+    const phone = DOM.fPhone.value.trim();
+    const district = DOM.fDistrict.value.trim();
+
+    if (!cart.length) {
+      showToast('Ваша корзина пуста');
+      return;
+    }
+    if (!name || !phone) {
+      showToast('Пожалуйста, заполните имя и телефон');
+      return;
+    }
+    if (deliveryType === 'delivery' && !district) {
+      showToast('Пожалуйста, выберите район доставки');
+      return;
+    }
+
+    const num = Math.floor(Math.random() * 9000 + 1000);
+    DOM.orderNum.textContent = `Заказ №${num}`;
+    cart = [];
+    updateCartUI();
+    renderSummary();
+    showPage('success');
+  }
+
+  function showToast(msg) {
+    DOM.toast.textContent = msg;
+    DOM.toast.classList.add('show');
+    // Защита от наложения таймеров
+    if(window.toastTimeout) clearTimeout(window.toastTimeout);
+    window.toastTimeout = setTimeout(() => DOM.toast.classList.remove('show'), 2500);
+  }
+
+  // Инициализация при загрузке
+  renderCatBar();
+  renderMenu();
+  updateCartUI();
+</script>
